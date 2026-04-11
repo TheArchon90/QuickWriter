@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-primary: #0d1117;
+  --color-bg-secondary: #161b22;
+  --color-bg-tertiary: #21262d;
+  --color-text-primary: #c9d1d9;
+  --color-text-secondary: #8b949e;
+  --color-text-muted: #484f58;
+  --color-accent: #58a6ff;
+  --color-insert: #3fb950;
+  --color-navigation: #58a6ff;
+  --color-danger: #f85149;
+  --color-warning: #d29922;
+}
+
+@keyframes cursor-breathe {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+@keyframes mode-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+@keyframes save-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+@keyframes milestone-pop {
+  0%, 100% { transform: scale(1); }
+  40% { transform: scale(1.15); }
+}
+
+@keyframes correction-shimmer {
+  0% { background-color: rgba(88, 166, 255, 0.2); }
+  100% { background-color: transparent; }
+}
+
+@keyframes ink-bloom {
+  0% { text-shadow: 0 0 4px rgba(88, 166, 255, 0.4); }
+  100% { text-shadow: none; }
+}
+
+.cm-editor .cm-cursor {
+  border-left-color: var(--color-accent);
+  border-left-width: 2px;
+  animation: cursor-breathe 2s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px rgba(88, 166, 255, 0.3));
+}
+
+.cm-editor {
+  height: 100%;
+  font-size: var(--editor-font-size, 16px);
+  font-family: var(--editor-font-family, monospace);
+}
+
+.cm-editor .cm-content {
+  padding: 32px 64px;
+  line-height: 2.0;
+  letter-spacing: 0.01em;
+}
+
+.cm-editor .cm-scroller {
+  overflow: auto;
+}
+
+/* Force line wrapping so text fits horizontally */
+.cm-editor .cm-lineWrapping {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.cm-correction-shimmer {
+  animation: correction-shimmer 400ms ease-out forwards;
+}
+
+.cm-ink-bloom {
+  animation: ink-bloom 300ms ease-out forwards;
+}
