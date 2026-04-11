@@ -19,6 +19,9 @@ const DEFAULT_SHORTCUTS = {
     open_line_below: "o",
     open_line_above: "O",
     highlight_sentence: "Ctrl+J",
+    highlight_sentence_backward: "Shift+U",
+    highlight_paragraph: "Alt+J",
+    highlight_paragraph_backward: "Shift+Alt+U",
     enter_insert_mode: "Ctrl+I",
   },
   insert: {
@@ -52,11 +55,48 @@ async function ensureConfigDir(): Promise<void> {
   await fs.mkdir(CONFIG_DIR, { recursive: true });
 }
 
+/**
+ * Merge persisted settings on top of defaults with a two-level deep merge.
+ * The top-level keys of fallback are always present, and within each top-level
+ * object the persisted values override the defaults but new default keys
+ * (e.g. newly added shortcut actions) still appear. For non-object values the
+ * persisted value wins outright.
+ */
+function mergeSettings<T>(fallback: T, persisted: unknown): T {
+  if (typeof fallback !== "object" || fallback === null || Array.isArray(fallback)) {
+    return (persisted ?? fallback) as T;
+  }
+  if (typeof persisted !== "object" || persisted === null || Array.isArray(persisted)) {
+    return fallback;
+  }
+  const result: Record<string, unknown> = { ...(fallback as object) };
+  const p = persisted as Record<string, unknown>;
+  for (const key of Object.keys(fallback as object)) {
+    const fval = (fallback as Record<string, unknown>)[key];
+    if (key in p) {
+      if (
+        fval !== null &&
+        typeof fval === "object" &&
+        !Array.isArray(fval) &&
+        p[key] !== null &&
+        typeof p[key] === "object" &&
+        !Array.isArray(p[key])
+      ) {
+        // One more level: persisted scalars override, new default scalars stay.
+        result[key] = { ...(fval as object), ...(p[key] as object) };
+      } else {
+        result[key] = p[key];
+      }
+    }
+  }
+  return result as T;
+}
+
 async function readJsonFile<T>(filename: string, fallback: T): Promise<T> {
   try {
     const filePath = path.join(CONFIG_DIR, filename);
     const raw = await fs.readFile(filePath, "utf-8");
-    return { ...fallback, ...JSON.parse(raw) };
+    return mergeSettings(fallback, JSON.parse(raw));
   } catch {
     return fallback;
   }

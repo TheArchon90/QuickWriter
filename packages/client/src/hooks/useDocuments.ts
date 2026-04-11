@@ -22,6 +22,7 @@ export function useDocuments() {
   const createDocument = useCallback(async (title: string) => {
     const doc = await api.files.create(title);
     dispatch({ type: "SET_DOCUMENT", payload: doc });
+    dispatch({ type: "SET_PENDING_INSERT_MODE", payload: true });
     await fetchRecent();
     await api.settings.save({ preferences: { lastDocumentId: doc.id } });
     return doc;

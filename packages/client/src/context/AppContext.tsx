@@ -33,6 +33,7 @@ interface AppState {
   wordCount: number;
   cursorLine: number;
   cursorCol: number;
+  pendingInsertMode: boolean;
 }
 
 type Action =
@@ -48,13 +49,15 @@ type Action =
   | { type: "SET_DIRTY"; payload: boolean }
   | { type: "SET_SAVE_STATUS"; payload: "idle" | "saving" | "saved" | "error" }
   | { type: "SET_WORD_COUNT"; payload: number }
-  | { type: "SET_CURSOR"; payload: { line: number; col: number } };
+  | { type: "SET_CURSOR"; payload: { line: number; col: number } }
+  | { type: "SET_PENDING_INSERT_MODE"; payload: boolean };
 
 const initialState: AppState = {
   currentDocument: null, settings: null, sidebarOpen: true,
   settingsPanelOpen: false, commandPaletteOpen: false,
   editorMode: "vim", vimMode: "normal", isDirty: false,
   saveStatus: "idle", wordCount: 0, cursorLine: 1, cursorCol: 1,
+  pendingInsertMode: false,
 };
 
 function reducer(state: AppState, action: Action): AppState {
@@ -85,6 +88,7 @@ function reducer(state: AppState, action: Action): AppState {
     case "SET_SAVE_STATUS": return { ...state, saveStatus: action.payload };
     case "SET_WORD_COUNT": return { ...state, wordCount: action.payload };
     case "SET_CURSOR": return { ...state, cursorLine: action.payload.line, cursorCol: action.payload.col };
+    case "SET_PENDING_INSERT_MODE": return { ...state, pendingInsertMode: action.payload };
     default: return state;
   }
 }

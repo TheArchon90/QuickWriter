@@ -1,6 +1,7 @@
 import { vim, Vim } from "@replit/codemirror-vim";
 import { type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { smartDeleteWordRange } from "../textRanges";
 
 interface VimModeCallbacks {
   onModeChange: (mode: "insert" | "normal") => void;
@@ -88,8 +89,7 @@ function registerVimActions() {
     const cursor = view.state.selection.main.head;
     const bounds = wordBounds(text, cursor);
     if (!bounds) return;
-    let [start, end] = bounds;
-    while (end < text.length && /\s/.test(text[end])) end++;
+    const { start, end } = smartDeleteWordRange(text, bounds[0], bounds[1]);
     view.dispatch({
       changes: { from: start, to: end },
       selection: { anchor: start },
@@ -116,7 +116,14 @@ function registerVimActions() {
     const cursor = view.state.selection.main.head;
     const bounds = wordBounds(text, cursor);
     if (bounds) {
-      view.dispatch({ selection: { anchor: bounds[0] } });
+      // Insert a space at the word start and place the cursor BEFORE it.
+      // Typing now produces "prev[typed] word" with proper spacing — the
+      // new space sits between the typed characters and the existing word,
+      // preventing the "typedword" glue that plain bounds[0] placement causes.
+      view.dispatch({
+        changes: { from: bounds[0], insert: " " },
+        selection: { anchor: bounds[0] },
+      });
     }
     enterInsert(cm);
   });
@@ -127,7 +134,14 @@ function registerVimActions() {
     const cursor = view.state.selection.main.head;
     const bounds = wordBounds(text, cursor);
     if (bounds) {
-      view.dispatch({ selection: { anchor: bounds[1] } });
+      // Insert a space right after the word and place the cursor AFTER the
+      // new space (so typing happens between the new space and whatever was
+      // already there). Typing produces "word [typed]next" with the new
+      // space keeping "word" and the typed characters separated.
+      view.dispatch({
+        changes: { from: bounds[1], insert: " " },
+        selection: { anchor: bounds[1] + 1 },
+      });
     }
     enterInsert(cm);
   });
@@ -151,6 +165,27 @@ function registerVimActions() {
     });
     enterInsert(cm);
   });
+}
+
+/**
+ * Force the editor into Vim insert mode. No-op if Vim actions haven't been
+ * registered yet (i.e. the editor is in Modern mode and vim() was never active).
+ */
+export function enterInsertMode(view: EditorView) {
+  if (!actionsRegistered) return;
+  const cm = (view as any).cm;
+  if (!cm) return;
+  Vim.handleKey(cm, INSERT_MODE_KEY, "mapping");
+}
+
+/**
+ * Force the editor out of Vim insert mode (back to normal/navigation). No-op
+ * if Vim isn't the active mode.
+ */
+export function exitInsertMode(view: EditorView) {
+  const cm = (view as any).cm;
+  if (!cm) return;
+  Vim.handleKey(cm, "<Esc>", "mapping");
 }
 
 export function createVimMode(

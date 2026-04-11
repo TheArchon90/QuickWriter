@@ -9,8 +9,16 @@ import { autoCapitalize } from "./extensions/autoCapitalize";
 import { autoPunctuate } from "./extensions/autoPunctuate";
 import { standaloneIExt } from "./extensions/standaloneI";
 import { wordHighlight } from "./extensions/wordHighlight";
-import { createVimMode } from "./keymaps/vimMode";
+import { createVimMode, enterInsertMode } from "./keymaps/vimMode";
 import { createModernMode } from "./keymaps/modernMode";
+import { doubleSpaceEscape } from "./extensions/doubleSpaceEscape";
+import { modalShortcuts } from "./extensions/modalShortcuts";
+import {
+  sentenceRangeAtCursor,
+  previousSentenceRange,
+  paragraphForwardRange,
+  paragraphBackwardRange,
+} from "./textRanges";
 
 export default function Editor() {
   const state = useAppState();
@@ -23,6 +31,7 @@ export default function Editor() {
   const autoCapComp = useRef(new Compartment());
   const autoPunctComp = useRef(new Compartment());
   const standaloneIComp = useRef(new Compartment());
+  const modalShortcutsComp = useRef(new Compartment());
 
   const getThemeExt = useCallback(() => {
     return state.settings?.theme.theme === "light" ? lightTheme : darkTheme;
@@ -32,13 +41,35 @@ export default function Editor() {
     const view = viewRef.current;
     if (!view) return;
     const cursor = view.state.selection.main.head;
-    const text = view.state.doc.toString();
-    let start = cursor;
-    let end = cursor;
-    while (start > 0 && !/[.!?\n]/.test(text[start - 1])) start--;
-    while (end < text.length && !/[.!?\n]/.test(text[end])) end++;
-    if (end < text.length) end++;
+    const { start, end } = sentenceRangeAtCursor(view.state.doc.toString(), cursor);
     view.dispatch({ selection: { anchor: start, head: end } });
+  }, []);
+
+  const highlightSentenceBackward = useCallback(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const cursor = view.state.selection.main.head;
+    const range = previousSentenceRange(view.state.doc.toString(), cursor);
+    if (!range) return;
+    // Cursor lands at the START of the previous sentence (backward motion).
+    view.dispatch({ selection: { anchor: range.end, head: range.start } });
+  }, []);
+
+  const highlightParagraphForward = useCallback(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const cursor = view.state.selection.main.head;
+    const { start, end } = paragraphForwardRange(view.state.doc.toString(), cursor);
+    view.dispatch({ selection: { anchor: start, head: end } });
+  }, []);
+
+  const highlightParagraphBackward = useCallback(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const cursor = view.state.selection.main.head;
+    const { start, end } = paragraphBackwardRange(view.state.doc.toString(), cursor);
+    // Cursor lands at the START of the paragraph (backward motion).
+    view.dispatch({ selection: { anchor: end, head: start } });
   }, []);
 
   const getModeExt = useCallback(() => {
@@ -52,12 +83,33 @@ export default function Editor() {
     return createModernMode(shortcuts, { onHighlightSentence: highlightSentence });
   }, [state.editorMode, state.settings?.shortcuts, dispatch, highlightSentence]);
 
+  const getModalShortcutsExt = useCallback(() => {
+    const shortcuts = state.settings?.shortcuts || {};
+    return Prec.highest(modalShortcuts(shortcuts, {
+      onHighlightSentence: highlightSentence,
+      onHighlightSentenceBackward: highlightSentenceBackward,
+      onHighlightParagraphForward: highlightParagraphForward,
+      onHighlightParagraphBackward: highlightParagraphBackward,
+    }));
+  }, [
+    state.settings?.shortcuts,
+    highlightSentence,
+    highlightSentenceBackward,
+    highlightParagraphForward,
+    highlightParagraphBackward,
+  ]);
+
   useEffect(() => {
     if (!editorRef.current || viewRef.current) return;
 
     const startState = EditorState.create({
       doc: state.currentDocument?.content || "",
       extensions: [
+        // HIGHEST priority: mode-transition & highlight-sentence shortcuts
+        // (reconfigured when the user edits shortcuts in Settings)
+        modalShortcutsComp.current.of(getModalShortcutsExt()),
+        // HIGHEST priority: intercept space double-tap before Vim's key handling
+        Prec.highest(doubleSpaceEscape()),
         // HIGHEST priority: intercept keys and paste before Vim
         Prec.highest(
           EditorView.domEventHandlers({
@@ -158,6 +210,12 @@ export default function Editor() {
 
   useEffect(() => {
     viewRef.current?.dispatch({
+      effects: modalShortcutsComp.current.reconfigure(getModalShortcutsExt()),
+    });
+  }, [getModalShortcutsExt]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({
       effects: autoCapComp.current.reconfigure(
         state.settings?.preferences.autoCapitalization ? autoCapitalize : []
       ),
@@ -178,6 +236,20 @@ export default function Editor() {
     el.style.setProperty("--editor-font-size", `${state.settings.theme.fontSize}px`);
     el.style.setProperty("--editor-font-family", state.settings.theme.fontFamily);
   }, [state.settings?.theme.fontSize, state.settings?.theme.fontFamily]);
+
+  // New documents start in Insert mode: focus the editor and (if Vim) drop
+  // straight into insert. Fires after the document-content effect so the view
+  // is already populated before we switch modes.
+  useEffect(() => {
+    if (!state.pendingInsertMode) return;
+    const view = viewRef.current;
+    if (!view) return;
+    view.focus();
+    if (state.editorMode === "vim") {
+      enterInsertMode(view);
+    }
+    dispatch({ type: "SET_PENDING_INSERT_MODE", payload: false });
+  }, [state.pendingInsertMode, state.editorMode, dispatch]);
 
   return (
     <div

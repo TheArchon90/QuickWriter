@@ -34,7 +34,11 @@ export default function ShortcutsTab() {
     move_prev_word: "Previous Word", delete_word: "Delete Word", change_word: "Change Word",
     insert_before_word: "Insert Before", append_after_word: "Append After",
     open_line_below: "Open Line Below", open_line_above: "Open Line Above",
-    highlight_sentence: "Highlight Sentence", enter_insert_mode: "Enter Insert Mode",
+    highlight_sentence: "Highlight Sentence (Forward)",
+    highlight_sentence_backward: "Highlight Sentence (Backward)",
+    highlight_paragraph: "Highlight Paragraph (Forward)",
+    highlight_paragraph_backward: "Highlight Paragraph (Backward)",
+    enter_insert_mode: "Enter Insert Mode",
     enter_navigation_mode: "Enter Navigation Mode", enter_navigation_mode_alt: "Enter Nav Mode (Alt)",
   };
 
