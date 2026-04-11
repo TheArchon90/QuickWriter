@@ -31,11 +31,21 @@ export const api = {
       ),
     remove: (id: string) =>
       request(`/files/${id}`, { method: "DELETE" }),
+    rename: (id: string, title: string) =>
+      request<{ id: string; title: string; updated_at: string }>(
+        `/files/${id}/rename`,
+        { method: "POST", body: JSON.stringify({ title }) }
+      ),
     search: (q: string) =>
       request<{ id: string; title: string; updated_at: string }[]>(
         `/files/search?q=${encodeURIComponent(q)}`
       ),
   },
+  rewrite: (document: string, selection: string, action: "expand" | "concise") =>
+    request<{ text: string }>("/rewrite", {
+      method: "POST",
+      body: JSON.stringify({ document, selection, action }),
+    }),
   settings: {
     get: () => request<{
       shortcuts: Record<string, Record<string, string>>;

@@ -29,6 +29,16 @@ export function useGlobalHotkeys() {
           e.stopPropagation();
           dispatch({ type: "TOGGLE_SIDEBAR" });
           break;
+        // Alternate sidebar toggle chord. The editor reclaimed Ctrl+B for
+        // markdown bold, so when focus is inside CodeMirror the DOM-event
+        // handler dispatches Ctrl+\ to the window instead — this case
+        // handles both that dispatched event and a real Ctrl+\ from outside
+        // the editor.
+        case "\\":
+          e.preventDefault();
+          e.stopPropagation();
+          dispatch({ type: "TOGGLE_SIDEBAR" });
+          break;
       }
     };
 

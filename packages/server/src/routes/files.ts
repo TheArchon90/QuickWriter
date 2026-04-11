@@ -3,6 +3,7 @@ import fs from "fs/promises";
 import {
   getRecentDocuments, getDocument, saveDocument,
   createDocument, archiveDocument, searchDocuments,
+  renameDocument,
 } from "../services/fileService.js";
 
 const router = Router();
@@ -44,6 +45,21 @@ router.post("/new", async (req, res) => {
     res.json(doc);
   } catch (err) {
     res.status(500).json({ error: "Failed to create document" });
+  }
+});
+
+router.post("/:id/rename", async (req, res) => {
+  try {
+    const { title } = req.body;
+    if (typeof title !== "string" || !title.trim()) {
+      return res.status(400).json({ error: "title (non-empty string) is required" });
+    }
+    const doc = await renameDocument(req.params.id, title.trim());
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+    res.json(doc);
+  } catch (err) {
+    console.error("[files/rename] error:", err);
+    res.status(500).json({ error: "Failed to rename document" });
   }
 });
 

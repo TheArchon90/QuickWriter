@@ -64,6 +64,17 @@ export async function archiveDocument(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function renameDocument(id: string, title: string): Promise<Document | null> {
+  const { data, error } = await supabase
+    .from("documents")
+    .update({ title, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error && error.code !== "PGRST116") throw error;
+  return data;
+}
+
 export async function searchDocuments(query: string): Promise<DocumentSummary[]> {
   const { data, error } = await supabase
     .from("documents")

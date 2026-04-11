@@ -44,6 +44,78 @@
   100% { text-shadow: none; }
 }
 
+/* Rewrite-landed bloom: richer than ink-bloom, fires when a Claude rewrite
+ * replaces a selection. Combines a soft accent backdrop with a text-shadow
+ * glow that fades out over ~900ms. Applied as a CodeMirror mark decoration
+ * by the rewriteBloom extension. */
+@keyframes rewrite-bloom {
+  0% {
+    background-color: rgba(88, 166, 255, 0.28);
+    text-shadow: 0 0 12px rgba(88, 166, 255, 0.7);
+  }
+  60% {
+    background-color: rgba(88, 166, 255, 0.12);
+    text-shadow: 0 0 6px rgba(88, 166, 255, 0.35);
+  }
+  100% {
+    background-color: transparent;
+    text-shadow: none;
+  }
+}
+
+.cm-rewrite-bloom {
+  animation: rewrite-bloom 900ms ease-out forwards;
+}
+
+/* SelectionPopup busy-state visuals: shimmer sweep across the active button,
+ * pulsing accent glow around the popup chrome, and a breathing sparkle icon. */
+@keyframes popup-shimmer-sweep {
+  0% { background-position: -150% 0; }
+  100% { background-position: 250% 0; }
+}
+
+.popup-shimmer-busy {
+  background-image: linear-gradient(
+    100deg,
+    rgba(88, 166, 255, 0) 0%,
+    rgba(88, 166, 255, 0.25) 45%,
+    rgba(88, 166, 255, 0.55) 50%,
+    rgba(88, 166, 255, 0.25) 55%,
+    rgba(88, 166, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: popup-shimmer-sweep 1.5s linear infinite;
+}
+
+@keyframes popup-accent-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgba(88, 166, 255, 0.2),
+      0 14px 40px -10px rgba(88, 166, 255, 0.22),
+      0 10px 35px -12px rgba(0, 0, 0, 0.55);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(88, 166, 255, 0.42),
+      0 14px 46px -10px rgba(88, 166, 255, 0.45),
+      0 10px 35px -12px rgba(0, 0, 0, 0.55);
+  }
+}
+
+.popup-busy-glow {
+  animation: popup-accent-glow 2.2s ease-in-out infinite;
+}
+
+@keyframes sparkle-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.22); opacity: 1; }
+}
+
+.sparkle-pulse {
+  animation: sparkle-pulse 1.1s ease-in-out infinite;
+  transform-origin: center;
+}
+
 .cm-editor .cm-cursor {
   border-left-color: var(--color-accent);
   border-left-width: 2px;
@@ -54,6 +126,15 @@
 .cm-editor {
   height: 100%;
   font-size: var(--editor-font-size, 16px);
+}
+
+/* CodeMirror 6's built-in base theme sets `font-family: monospace` directly on
+ * `.cm-content` — that blocks inheritance from `.cm-editor`, so our font-family
+ * override MUST target the content/line elements themselves. Specificity
+ * (0,0,2,0) beats the base theme's single-class rule. */
+.cm-editor .cm-scroller,
+.cm-editor .cm-content,
+.cm-editor .cm-line {
   font-family: var(--editor-font-family, monospace);
 }
 

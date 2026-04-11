@@ -1,8 +1,9 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { EditorState, Compartment, Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { useAppState, useAppDispatch } from "../../context/AppContext";
+import { api } from "../../lib/api";
 import { darkTheme } from "./themes/dark";
 import { lightTheme } from "./themes/light";
 import { autoCapitalize } from "./extensions/autoCapitalize";
@@ -13,6 +14,10 @@ import { createVimMode, enterInsertMode } from "./keymaps/vimMode";
 import { createModernMode } from "./keymaps/modernMode";
 import { doubleSpaceEscape } from "./extensions/doubleSpaceEscape";
 import { modalShortcuts } from "./extensions/modalShortcuts";
+import { rewriteBloomExt, triggerRewriteBloom } from "./extensions/rewriteBloom";
+import { markdownFormatKeymap } from "./extensions/markdownFormat";
+import { rewriteShortcuts } from "./extensions/rewriteShortcuts";
+import SelectionPopup, { type RewriteAction } from "./SelectionPopup";
 import {
   sentenceRangeAtCursor,
   previousSentenceRange,
@@ -20,11 +25,29 @@ import {
   paragraphBackwardRange,
 } from "./textRanges";
 
+interface SelectionInfo {
+  from: number;
+  to: number;
+  coords: { top: number; left: number };
+}
+
 export default function Editor() {
   const state = useAppState();
   const dispatch = useAppDispatch();
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+
+  // Tracks the active selection for the floating SelectionPopup. `null` hides it.
+  // Updated by the CodeMirror updateListener on every selection change.
+  const [selectionInfo, setSelectionInfo] = useState<SelectionInfo | null>(null);
+
+  // Stable-ref bridge from the rewrite keyboard shortcut extension (constructed
+  // once inside EditorState.create) to the React `handleRewrite` callback
+  // (re-created on every selection change). The extension reads `.current`
+  // on every keystroke, so it always sees the latest callback.
+  const handleRewriteRef = useRef<(action: RewriteAction) => Promise<void>>(
+    async () => {},
+  );
 
   const themeComp = useRef(new Compartment());
   const modeComp = useRef(new Compartment());
@@ -130,8 +153,11 @@ export default function Editor() {
               const ctrl = event.ctrlKey || event.metaKey;
               if (!ctrl) return false;
 
-              // App hotkeys: prevent CM from processing, dispatch to window
-              if (["k", "b", ","].includes(event.key)) {
+              // App hotkeys: prevent CM from processing, dispatch to window.
+              // Ctrl+B is intentionally NOT in this list — it's reclaimed by
+              // markdownFormatKeymap for bold. Ctrl+\ is the alternate sidebar
+              // toggle chord from inside the editor.
+              if (["k", ",", "\\"].includes(event.key)) {
                 window.dispatchEvent(new KeyboardEvent("keydown", {
                   key: event.key, ctrlKey: event.ctrlKey, metaKey: event.metaKey,
                   bubbles: true, cancelable: true,
@@ -169,12 +195,36 @@ export default function Editor() {
         autoPunctComp.current.of(autoPunctuate),
         standaloneIComp.current.of(standaloneIExt),
         wordHighlight,
+        rewriteBloomExt,
+        // Mod-b / Mod-i / Mod-1..3 for markdown bold/italic/headers.
+        markdownFormatKeymap,
+        // Mod-e / Mod-Shift-e for expand/concise rewrite actions.
+        // Reads from handleRewriteRef so it stays bound to the latest React
+        // callback even though the extension is built once.
+        rewriteShortcuts(() => handleRewriteRef.current),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             dispatch({ type: "UPDATE_CONTENT", payload: update.state.doc.toString() });
             const text = update.state.doc.toString();
             const count = text.trim() ? text.trim().split(/\s+/).length : 0;
             dispatch({ type: "SET_WORD_COUNT", payload: count });
+          }
+          if (update.selectionSet || update.docChanged || update.viewportChanged) {
+            const sel = update.state.selection.main;
+            if (sel.empty) {
+              setSelectionInfo(null);
+            } else {
+              const coords = update.view.coordsAtPos(sel.from);
+              if (coords) {
+                setSelectionInfo({
+                  from: sel.from,
+                  to: sel.to,
+                  coords: { top: coords.top, left: coords.left },
+                });
+              } else {
+                setSelectionInfo(null);
+              }
+            }
           }
           if (update.selectionSet) {
             const cursor = update.state.selection.main.head;
@@ -251,15 +301,61 @@ export default function Editor() {
     dispatch({ type: "SET_PENDING_INSERT_MODE", payload: false });
   }, [state.pendingInsertMode, state.editorMode, dispatch]);
 
+  // Rewrite handler — called by SelectionPopup when the user clicks Expand/Concise.
+  // Snapshots the selection range, calls the server, replaces the range with
+  // Claude's response, then clears the popup.
+  const handleRewrite = useCallback(
+    async (action: RewriteAction) => {
+      const view = viewRef.current;
+      const snapshot = selectionInfo;
+      if (!view || !snapshot) return;
+
+      const doc = view.state.doc.toString();
+      const selection = doc.slice(snapshot.from, snapshot.to);
+      if (!selection.trim()) return;
+
+      const result = await api.rewrite(doc, selection, action);
+
+      // Replace the snapshot range with the rewritten text.
+      view.dispatch({
+        changes: { from: snapshot.from, to: snapshot.to, insert: result.text },
+        selection: { anchor: snapshot.from + result.text.length },
+      });
+
+      // Dopamine pass: bloom the newly-inserted range so the user feels the
+      // result land. The extension self-clears after the animation runs.
+      triggerRewriteBloom(view, snapshot.from, snapshot.from + result.text.length);
+
+      // Hide the popup — the selection has been collapsed to a cursor.
+      setSelectionInfo(null);
+      // Return focus to the editor so the user can keep typing.
+      view.focus();
+    },
+    [selectionInfo]
+  );
+
+  // Keep handleRewriteRef pointed at the latest handleRewrite closure so the
+  // Mod-e / Mod-Shift-e extension (constructed once) can always call through
+  // to the current React callback.
+  useEffect(() => {
+    handleRewriteRef.current = handleRewrite;
+  }, [handleRewrite]);
+
   return (
-    <div
-      ref={editorRef}
-      className="flex-1 overflow-auto"
-      style={{
-        backgroundColor: state.editorMode === "vim" && state.vimMode === "insert"
-          ? "#0d1214" : "#0d1117",
-        transition: "background-color 400ms ease",
-      }}
-    />
+    <>
+      <div
+        ref={editorRef}
+        className="flex-1 overflow-auto"
+        style={{
+          backgroundColor: state.editorMode === "vim" && state.vimMode === "insert"
+            ? "#0d1214" : "#0d1117",
+          transition: "background-color 400ms ease",
+        }}
+      />
+      <SelectionPopup
+        coords={selectionInfo ? selectionInfo.coords : null}
+        onAction={handleRewrite}
+      />
+    </>
   );
 }

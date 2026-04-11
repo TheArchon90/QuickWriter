@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppState } from "../../context/AppContext";
+import HotkeyBar from "./HotkeyBar";
 
 export default function StatusBar() {
   const state = useAppState();
@@ -29,6 +30,8 @@ export default function StatusBar() {
   }, [state.vimMode]);
 
   return (
+    <>
+    <HotkeyBar />
     <div className="h-8 bg-bg-secondary border-t border-bg-tertiary flex items-center justify-between px-4 text-xs select-none">
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5">
@@ -73,5 +76,6 @@ export default function StatusBar() {
         </AnimatePresence>
       </div>
     </div>
+    </>
   );
 }
