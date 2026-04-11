@@ -18,6 +18,7 @@ import { rewriteBloomExt, triggerRewriteBloom } from "./extensions/rewriteBloom"
 import { markdownFormatKeymap } from "./extensions/markdownFormat";
 import { rewriteShortcuts } from "./extensions/rewriteShortcuts";
 import SelectionPopup, { type RewriteAction } from "./SelectionPopup";
+import InsertPopup, { type InsertMode } from "./InsertPopup";
 import {
   sentenceRangeAtCursor,
   previousSentenceRange,
@@ -31,6 +32,11 @@ interface SelectionInfo {
   coords: { top: number; left: number };
 }
 
+interface InsertInfo {
+  pos: number;
+  coords: { top: number; left: number };
+}
+
 export default function Editor() {
   const state = useAppState();
   const dispatch = useAppDispatch();
@@ -40,6 +46,11 @@ export default function Editor() {
   // Tracks the active selection for the floating SelectionPopup. `null` hides it.
   // Updated by the CodeMirror updateListener on every selection change.
   const [selectionInfo, setSelectionInfo] = useState<SelectionInfo | null>(null);
+
+  // Tracks the cursor position for the floating InsertPopup. Non-null means the
+  // cursor is sitting on an empty line (no selection, no content on the line),
+  // which is the trigger for Claude-generated paragraph insertion.
+  const [insertInfo, setInsertInfo] = useState<InsertInfo | null>(null);
 
   // Stable-ref bridge from the rewrite keyboard shortcut extension (constructed
   // once inside EditorState.create) to the React `handleRewrite` callback
@@ -212,8 +223,26 @@ export default function Editor() {
           if (update.selectionSet || update.docChanged || update.viewportChanged) {
             const sel = update.state.selection.main;
             if (sel.empty) {
+              // No selection — kill the rewrite popup and check if we should
+              // show the insert popup instead (cursor on an empty line).
               setSelectionInfo(null);
+              const line = update.state.doc.lineAt(sel.head);
+              if (line.text.trim() === "") {
+                const coords = update.view.coordsAtPos(sel.head);
+                if (coords) {
+                  setInsertInfo({
+                    pos: sel.head,
+                    coords: { top: coords.top, left: coords.left },
+                  });
+                } else {
+                  setInsertInfo(null);
+                }
+              } else {
+                setInsertInfo(null);
+              }
             } else {
+              // Selection present — rewrite mode; hide insert popup.
+              setInsertInfo(null);
               const coords = update.view.coordsAtPos(sel.from);
               if (coords) {
                 setSelectionInfo({
@@ -341,6 +370,39 @@ export default function Editor() {
     handleRewriteRef.current = handleRewrite;
   }, [handleRewrite]);
 
+  // Insert handler — called by InsertPopup when the user picks Dice or Custom
+  // on an empty line. Snapshots the cursor position, asks Claude to write a
+  // paragraph that fits between the before/after context, inserts it, blooms
+  // the result, and dismisses the popup.
+  const handleInsert = useCallback(
+    async (mode: InsertMode, prompt?: string) => {
+      const view = viewRef.current;
+      const snapshot = insertInfo;
+      if (!view || !snapshot) return;
+
+      const doc = view.state.doc.toString();
+      const result = await api.insert(doc, snapshot.pos, mode, prompt);
+
+      // Insert the generated paragraph at the snapshot position. Using
+      // `changes: { from, insert }` without a `to` performs a pure insert
+      // (no deletion) — the empty line stays intact around the new text.
+      view.dispatch({
+        changes: { from: snapshot.pos, insert: result.text },
+        selection: { anchor: snapshot.pos + result.text.length },
+      });
+
+      // Bloom the newly inserted range so the user feels the result land.
+      triggerRewriteBloom(view, snapshot.pos, snapshot.pos + result.text.length);
+
+      // Hide the popup; cursor moved, and the line is no longer empty, so
+      // the updateListener would clear insertInfo on next tick anyway —
+      // but clearing here avoids a brief flicker.
+      setInsertInfo(null);
+      view.focus();
+    },
+    [insertInfo]
+  );
+
   return (
     <>
       <div
@@ -355,6 +417,10 @@ export default function Editor() {
       <SelectionPopup
         coords={selectionInfo ? selectionInfo.coords : null}
         onAction={handleRewrite}
+      />
+      <InsertPopup
+        coords={insertInfo ? insertInfo.coords : null}
+        onAction={handleInsert}
       />
     </>
   );

@@ -46,6 +46,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ document, selection, action }),
     }),
+  insert: (
+    document: string,
+    position: number,
+    mode: "dice" | "custom",
+    prompt?: string,
+  ) =>
+    request<{ text: string }>("/insert", {
+      method: "POST",
+      body: JSON.stringify({ document, position, mode, prompt }),
+    }),
   settings: {
     get: () => request<{
       shortcuts: Record<string, Record<string, string>>;
