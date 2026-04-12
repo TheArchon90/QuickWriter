@@ -59,25 +59,31 @@ export const autoCapitalize = ViewPlugin.fromClass(
         }
       }
 
-      // ── Case 2: after any change, check the char at cursor ──
-      if (cursor >= state.doc.length) return;
-      const charAtCursor = state.doc.sliceString(cursor, cursor + 1);
-      if (!/[a-z]/.test(charAtCursor)) return;
+      // ── Case 2: scan near the cursor for uncapitalized sentence starts ──
+      // The cursor might not land exactly on the first letter of the word
+      // that needs capitalizing (e.g., Vim `dw` can leave the cursor
+      // mid-word). Scan ±10 chars to catch it.
+      const searchFrom = Math.max(0, cursor - 10);
+      const searchTo = Math.min(state.doc.length, cursor + 10);
+      const nearby = state.doc.sliceString(searchFrom, searchTo);
 
-      const line = state.doc.lineAt(cursor);
-      const textBefore = state.doc.sliceString(
-        Math.max(0, line.from - 200),
-        cursor,
-      );
-      if (shouldCapitalizeAfter(textBefore)) {
-        update.view.dispatch({
-          changes: {
-            from: cursor,
-            to: cursor + 1,
-            insert: charAtCursor.toUpperCase(),
-          },
-          annotations: isAutoCapFix.of(true),
-        });
+      for (let i = 0; i < nearby.length; i++) {
+        const ch = nearby[i];
+        if (!/[a-z]/.test(ch)) continue;
+
+        const pos = searchFrom + i;
+        const line = state.doc.lineAt(pos);
+        const textBefore = state.doc.sliceString(
+          Math.max(0, line.from - 200),
+          pos,
+        );
+        if (shouldCapitalizeAfter(textBefore)) {
+          update.view.dispatch({
+            changes: { from: pos, to: pos + 1, insert: ch.toUpperCase() },
+            annotations: isAutoCapFix.of(true),
+          });
+          return; // one fix per update to avoid conflicts
+        }
       }
     }
   },
