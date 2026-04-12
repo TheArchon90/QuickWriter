@@ -1,5 +1,6 @@
 import { Annotation } from "@codemirror/state";
 import { ViewPlugin, ViewUpdate } from "@codemirror/view";
+import { CHECKPOINT_RE } from "./checkpoints";
 
 // Annotation marking our own dispatches so we can skip them on re-entry.
 const isPunctFix = Annotation.define<boolean>();
@@ -132,6 +133,11 @@ export const punctuationCleanup = ViewPlugin.fromClass(
       update.changes.iterChanges((fromA, toA, fromB, toB) => {
         if (toA - fromA > toB - fromB) hasRemoval = true;
       });
+
+      // Skip if the change is on a checkpoint line — those are hidden by
+      // a widget decoration and modifying them would break the regex match.
+      const changeLine = doc.lineAt(Math.min(changeFrom, doc.length));
+      if (CHECKPOINT_RE.test(changeLine.text.trim())) return;
 
       // Expand by a small buffer to catch patterns at edit boundaries.
       const BUFFER = 20;

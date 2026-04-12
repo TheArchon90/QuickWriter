@@ -22,7 +22,7 @@ import { Prec, type Extension, type Range } from "@codemirror/state";
  */
 
 const CHECKPOINT_TEXT = "<!-- checkpoint -->";
-const CHECKPOINT_RE = /^<!-- checkpoint -->$/;
+export const CHECKPOINT_RE = /^<!-- checkpoint -->$/;
 
 // ── Widget ──────────────────────────────────────────────────────────
 
@@ -80,7 +80,7 @@ function buildDecorations(view: EditorView): DecorationSet {
     const line = doc.line(i);
     if (CHECKPOINT_RE.test(line.text.trim())) {
       widgets.push(
-        Decoration.replace({ widget, block: true }).range(line.from, line.to),
+        Decoration.replace({ widget }).range(line.from, line.to),
       );
     }
   }

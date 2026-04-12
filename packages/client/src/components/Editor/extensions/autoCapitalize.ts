@@ -1,6 +1,7 @@
 import { Annotation } from "@codemirror/state";
 import { ViewPlugin, ViewUpdate } from "@codemirror/view";
 import { shouldCapitalizeAfter } from "../../../lib/textProcessing";
+import { CHECKPOINT_RE } from "./checkpoints";
 
 // Annotation marking our own dispatches so we can skip them on re-entry.
 const isAutoCapFix = Annotation.define<boolean>();
@@ -36,6 +37,11 @@ export const autoCapitalize = ViewPlugin.fromClass(
 
       const { state } = update;
       const cursor = state.selection.main.head;
+
+      // Never touch checkpoint lines — their content is hidden by a widget
+      // decoration and modifying it would break the regex match.
+      const cursorLine = state.doc.lineAt(cursor);
+      if (CHECKPOINT_RE.test(cursorLine.text.trim())) return;
 
       // ── Case 1: capitalize a just-typed lowercase letter (synchronous) ──
       const isTyping = update.transactions.some((tr) =>
@@ -83,6 +89,8 @@ export const autoCapitalize = ViewPlugin.fromClass(
 
             const pos = searchFrom + i;
             const line = currentState.doc.lineAt(pos);
+            // Skip checkpoint lines.
+            if (CHECKPOINT_RE.test(line.text.trim())) continue;
             const textBefore = currentState.doc.sliceString(
               Math.max(0, line.from - 200),
               pos,
