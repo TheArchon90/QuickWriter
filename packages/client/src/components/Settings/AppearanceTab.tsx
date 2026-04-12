@@ -39,6 +39,7 @@ export default function AppearanceTab() {
           <option value="monospace">Monospace (System)</option>
           <option value="'SF Mono', 'Fira Code', monospace">SF Mono / Fira Code</option>
           <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+          <option value="'Roboto', sans-serif">Roboto</option>
           <option value="Georgia, serif">Georgia (Serif)</option>
           <option value="'Palatino Linotype', serif">Palatino (Serif)</option>
         </select>
