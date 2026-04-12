@@ -8,6 +8,7 @@ import { darkTheme } from "./themes/dark";
 import { lightTheme } from "./themes/light";
 import { autoCapitalize } from "./extensions/autoCapitalize";
 import { autoPunctuate } from "./extensions/autoPunctuate";
+import { punctuationCleanup } from "./extensions/punctuationCleanup";
 import { standaloneIExt } from "./extensions/standaloneI";
 import { wordHighlight } from "./extensions/wordHighlight";
 import { createVimMode, enterInsertMode } from "./keymaps/vimMode";
@@ -203,7 +204,7 @@ export default function Editor() {
         themeComp.current.of(getThemeExt()),
         modeComp.current.of(getModeExt()),
         autoCapComp.current.of(autoCapitalize),
-        autoPunctComp.current.of(autoPunctuate),
+        autoPunctComp.current.of([autoPunctuate, punctuationCleanup]),
         standaloneIComp.current.of(standaloneIExt),
         wordHighlight,
         rewriteBloomExt,
@@ -304,7 +305,9 @@ export default function Editor() {
   useEffect(() => {
     viewRef.current?.dispatch({
       effects: autoPunctComp.current.reconfigure(
-        state.settings?.preferences.autoPunctuation ? autoPunctuate : []
+        state.settings?.preferences.autoPunctuation
+          ? [autoPunctuate, punctuationCleanup]
+          : []
       ),
     });
   }, [state.settings?.preferences.autoPunctuation]);
