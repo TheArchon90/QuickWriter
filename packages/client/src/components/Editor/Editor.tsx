@@ -407,7 +407,7 @@ export default function Editor() {
     <>
       <div
         ref={editorRef}
-        className="flex-1 overflow-auto"
+        className="h-full overflow-hidden"
         style={{
           backgroundColor: state.editorMode === "vim" && state.vimMode === "insert"
             ? "#0d1214" : "#0d1117",
