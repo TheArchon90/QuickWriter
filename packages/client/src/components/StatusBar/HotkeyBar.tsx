@@ -12,6 +12,7 @@ const SHORTCUTS: Record<string, Shortcut[]> = {
     { keys: "Ctrl+2", label: "H2" },
     { keys: "Ctrl+E", label: "Expand" },
     { keys: "Ctrl+Shift+E", label: "Concise" },
+    { keys: "Ctrl+M", label: "Marker" },
     { keys: "Ctrl+S", label: "Save" },
   ],
   "vim-normal": [
@@ -21,7 +22,7 @@ const SHORTCUTS: Record<string, Shortcut[]> = {
     { keys: "b", label: "Prev word" },
     { keys: "gg", label: "Top" },
     { keys: "G", label: "Bottom" },
-    { keys: "/", label: "Search" },
+    { keys: "Ctrl+M", label: "Marker" },
     { keys: "Ctrl+E", label: "Expand" },
   ],
   "modern": [
@@ -30,7 +31,7 @@ const SHORTCUTS: Record<string, Shortcut[]> = {
     { keys: "Ctrl+1", label: "H1" },
     { keys: "Ctrl+2", label: "H2" },
     { keys: "Ctrl+E", label: "Expand" },
-    { keys: "Ctrl+Shift+E", label: "Concise" },
+    { keys: "Ctrl+M", label: "Marker" },
     { keys: "Ctrl+K", label: "Palette" },
     { keys: "Ctrl+,", label: "Settings" },
   ],

@@ -155,6 +155,36 @@
   overflow-wrap: anywhere;
 }
 
+/* Checkpoint marker — bright green bookmark bar between paragraphs.
+ * Rendered by checkpoints.ts as a Decoration.replace widget so the raw
+ * `<!-- checkpoint -->` text is hidden and only the visual bar shows. */
+.cm-checkpoint {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 32px;
+  user-select: none;
+  cursor: default;
+}
+
+.cm-checkpoint-line {
+  flex: 1;
+  height: 1px;
+  background: var(--color-insert);
+  opacity: 0.45;
+  box-shadow: 0 0 6px rgba(63, 185, 80, 0.25);
+}
+
+.cm-checkpoint-label {
+  color: var(--color-insert);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.85;
+  text-shadow: 0 0 8px rgba(63, 185, 80, 0.3);
+}
+
 .cm-correction-shimmer {
   animation: correction-shimmer 400ms ease-out forwards;
 }

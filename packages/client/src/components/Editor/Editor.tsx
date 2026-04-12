@@ -18,6 +18,7 @@ import { modalShortcuts } from "./extensions/modalShortcuts";
 import { rewriteBloomExt, triggerRewriteBloom } from "./extensions/rewriteBloom";
 import { markdownFormatKeymap } from "./extensions/markdownFormat";
 import { rewriteShortcuts } from "./extensions/rewriteShortcuts";
+import { checkpointsExt } from "./extensions/checkpoints";
 import SelectionPopup, { type RewriteAction } from "./SelectionPopup";
 import InsertPopup, { type InsertMode } from "./InsertPopup";
 import {
@@ -208,6 +209,7 @@ export default function Editor() {
         standaloneIComp.current.of(standaloneIExt),
         wordHighlight,
         rewriteBloomExt,
+        checkpointsExt,
         // Mod-b / Mod-i / Mod-1..3 for markdown bold/italic/headers.
         markdownFormatKeymap,
         // Mod-e / Mod-Shift-e for expand/concise rewrite actions.
