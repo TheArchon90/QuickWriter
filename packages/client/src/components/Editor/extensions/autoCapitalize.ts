@@ -12,15 +12,19 @@ const isAutoCapFix = Annotation.define<boolean>();
  *
  * 1. **Type-time**: when the user types a lowercase letter that falls
  *    immediately after a sentence boundary, capitalize it in place.
+ *    Runs synchronously within the update cycle (works reliably for
+ *    standard keyboard input).
  *
  * 2. **Post-change**: after ANY change (including Vim deletions, paste,
- *    undo, etc.), check whether the character now at the cursor is a
- *    lowercase letter at a sentence start. This handles deletions that
- *    promote a mid-sentence word to sentence-initial position.
+ *    undo, etc.), scans ±10 characters around the cursor for any
+ *    lowercase letter at a sentence start and capitalizes it. Deferred
+ *    to the next tick via setTimeout — CM6 can silently drop dispatches
+ *    from within a ViewPlugin.update() when another extension (like Vim)
+ *    is mid-transaction. The 0ms defer lets Vim's update cycle finish
+ *    before we dispatch our capitalize change.
  *
  * Both paths skip our own capitalize dispatches (annotated with
- * `isAutoCapFix`) to avoid infinite loops. We do NOT filter by user-event
- * type because Vim-mode operations may not carry standard event labels.
+ * `isAutoCapFix`) to avoid infinite loops.
  */
 export const autoCapitalize = ViewPlugin.fromClass(
   class {
@@ -33,7 +37,7 @@ export const autoCapitalize = ViewPlugin.fromClass(
       const { state } = update;
       const cursor = state.selection.main.head;
 
-      // ── Case 1: capitalize a just-typed lowercase letter ──
+      // ── Case 1: capitalize a just-typed lowercase letter (synchronous) ──
       const isTyping = update.transactions.some((tr) =>
         tr.isUserEvent("input.type"),
       );
@@ -59,32 +63,42 @@ export const autoCapitalize = ViewPlugin.fromClass(
         }
       }
 
-      // ── Case 2: scan near the cursor for uncapitalized sentence starts ──
-      // The cursor might not land exactly on the first letter of the word
-      // that needs capitalizing (e.g., Vim `dw` can leave the cursor
-      // mid-word). Scan ±10 chars to catch it.
-      const searchFrom = Math.max(0, cursor - 10);
-      const searchTo = Math.min(state.doc.length, cursor + 10);
-      const nearby = state.doc.sliceString(searchFrom, searchTo);
+      // ── Case 2: deferred scan for uncapitalized sentence starts ──
+      // Capture the view reference — setTimeout runs after update() returns,
+      // so we read the CURRENT state at fire time (not the stale closure).
+      const view = update.view;
+      setTimeout(() => {
+        // Guard: the view might have been destroyed between scheduling and
+        // firing (e.g., component unmount during fast navigation).
+        try {
+          const currentState = view.state;
+          const cur = currentState.selection.main.head;
+          const searchFrom = Math.max(0, cur - 10);
+          const searchTo = Math.min(currentState.doc.length, cur + 10);
+          const nearby = currentState.doc.sliceString(searchFrom, searchTo);
 
-      for (let i = 0; i < nearby.length; i++) {
-        const ch = nearby[i];
-        if (!/[a-z]/.test(ch)) continue;
+          for (let i = 0; i < nearby.length; i++) {
+            const ch = nearby[i];
+            if (!/[a-z]/.test(ch)) continue;
 
-        const pos = searchFrom + i;
-        const line = state.doc.lineAt(pos);
-        const textBefore = state.doc.sliceString(
-          Math.max(0, line.from - 200),
-          pos,
-        );
-        if (shouldCapitalizeAfter(textBefore)) {
-          update.view.dispatch({
-            changes: { from: pos, to: pos + 1, insert: ch.toUpperCase() },
-            annotations: isAutoCapFix.of(true),
-          });
-          return; // one fix per update to avoid conflicts
+            const pos = searchFrom + i;
+            const line = currentState.doc.lineAt(pos);
+            const textBefore = currentState.doc.sliceString(
+              Math.max(0, line.from - 200),
+              pos,
+            );
+            if (shouldCapitalizeAfter(textBefore)) {
+              view.dispatch({
+                changes: { from: pos, to: pos + 1, insert: ch.toUpperCase() },
+                annotations: isAutoCapFix.of(true),
+              });
+              return; // one fix per cycle
+            }
+          }
+        } catch {
+          // View destroyed — silently ignore
         }
-      }
+      }, 0);
     }
   },
 );
