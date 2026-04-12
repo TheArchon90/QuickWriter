@@ -107,7 +107,7 @@ export default function InsertPopup({ coords, onAction }: InsertPopupProps) {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 4, scale: 0.97 }}
           transition={{ duration: 0.14, ease: [0.2, 0.8, 0.2, 1] }}
-          className={`fixed z-50 flex items-center gap-1 rounded-lg border border-bg-tertiary bg-bg-secondary px-1.5 py-1 shadow-xl shadow-black/40 backdrop-blur-sm ${
+          className={`fixed z-50 flex items-center gap-1 rounded-lg border border-bg-tertiary bg-bg-secondary px-1.5 py-1 shadow-xl shadow-black/40 backdrop-blur-sm pointer-events-none ${
             isBusy ? "popup-busy-glow" : ""
           }`}
           style={{
@@ -138,7 +138,7 @@ export default function InsertPopup({ coords, onAction }: InsertPopupProps) {
                 whileHover={!isBusy ? { scale: 1.04 } : undefined}
                 whileTap={!isBusy ? { scale: 0.94 } : undefined}
                 transition={{ duration: 0.1, ease: "easeOut" }}
-                className={`relative flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                className={`pointer-events-auto relative flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
                   busy === "dice"
                     ? "text-accent popup-shimmer-busy"
                     : "text-text-primary hover:bg-bg-tertiary"
@@ -155,7 +155,7 @@ export default function InsertPopup({ coords, onAction }: InsertPopupProps) {
                 whileHover={!isBusy ? { scale: 1.04 } : undefined}
                 whileTap={!isBusy ? { scale: 0.94 } : undefined}
                 transition={{ duration: 0.1, ease: "easeOut" }}
-                className={`relative flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors text-text-primary hover:bg-bg-tertiary ${
+                className={`pointer-events-auto relative flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors text-text-primary hover:bg-bg-tertiary ${
                   isBusy ? "opacity-35" : ""
                 }`}
               >
@@ -166,7 +166,7 @@ export default function InsertPopup({ coords, onAction }: InsertPopupProps) {
           )}
 
           {phase === "custom" && (
-            <div className="flex items-center gap-1.5 px-1 py-0.5">
+            <div className="pointer-events-auto flex items-center gap-1.5 px-1 py-0.5">
               <Sparkle pulsing={busy === "custom"} />
               <input
                 ref={inputRef}
