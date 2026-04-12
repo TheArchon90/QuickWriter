@@ -1,15 +1,19 @@
+import { Annotation } from "@codemirror/state";
 import { ViewPlugin, ViewUpdate } from "@codemirror/view";
+
+// Annotation marking our own dispatches so we can skip them on re-entry.
+const isPunctFix = Annotation.define<boolean>();
 
 /**
  * Real-time punctuation cleanup.
  *
- * Fires after every user-initiated change (type, delete, paste) and scans the
- * area around the edit for common punctuation artifacts: double spaces, spaces
- * before punctuation, orphaned commas after sentence-end, and double periods.
+ * Fires after every document change, scans the area around the edit for
+ * common punctuation artifacts, and fixes them with precise individual
+ * changes so the cursor stays in place.
  *
- * Generates precise individual changes (not a bulk replace) so the cursor
- * stays in place. The cleanup dispatch carries no user-event annotation, so
- * it won't retrigger this plugin, autoCapitalize, or autoPunctuate.
+ * Does NOT filter by user-event type — Vim-mode operations may not carry
+ * standard event labels. Instead, skips only our own annotated dispatches
+ * and detects deletions by inspecting the actual change deltas.
  */
 
 interface Fix {
@@ -21,8 +25,8 @@ interface Fix {
 /**
  * Collect all fixes for the text in [offset, offset + text.length).
  *
- * @param alwaysRules  - if true, run rules that are safe during typing
- * @param deleteRules  - if true, also run rules that should only fire on delete/paste
+ * @param deleteRules  - if true, run rules that should only fire when text
+ *                       was removed (double-period, orphaned comma, etc.)
  */
 function collectFixes(
   text: string,
@@ -31,10 +35,9 @@ function collectFixes(
 ): Fix[] {
   const fixes: Fix[] = [];
 
-  // ── Always-active rules (safe during typing) ──
+  // ── Always-active rules ──
 
-  // 1. Collapse double+ spaces to single (not at line start / doc start).
-  //    Lookbehind requires a non-space char so we don't collapse indentation.
+  // 1. Collapse double+ spaces to single (not at line/doc start).
   for (const m of text.matchAll(/(?<=\S) {2,}/g)) {
     fixes.push({
       from: offset + m.index!,
@@ -44,7 +47,6 @@ function collectFixes(
   }
 
   // 2. Remove space(s) immediately before punctuation: " ." → "."
-  //    Targets . , ! ? ; : — the standard set.
   for (const m of text.matchAll(/ +([.,!?;:])/g)) {
     fixes.push({
       from: offset + m.index!,
@@ -53,11 +55,10 @@ function collectFixes(
     });
   }
 
-  // ── Delete/paste-only rules (would interfere with typing) ──
+  // ── Delete/paste-only rules (would eat "..." mid-typing etc.) ──
 
   if (deleteRules) {
     // 3. Double period that isn't part of an ellipsis: ".." → "."
-    //    Negative lookaround ensures "..." stays intact.
     for (const m of text.matchAll(/(?<!\.)\.\.(?!\.)/g)) {
       fixes.push({
         from: offset + m.index!,
@@ -94,8 +95,7 @@ function collectFixes(
     }
   }
 
-  // Sort by position and de-overlap: if two fixes cover the same region,
-  // keep the first (higher-priority) one.
+  // Sort by position and de-overlap (keep first/highest priority).
   fixes.sort((a, b) => a.from - b.from);
   const deduped: Fix[] = [];
   for (const fix of fixes) {
@@ -111,20 +111,8 @@ export const punctuationCleanup = ViewPlugin.fromClass(
     update(update: ViewUpdate) {
       if (!update.docChanged) return;
 
-      // Determine the type of user change. Skip programmatic dispatches
-      // (our own cleanup has no annotation → isUserChange is false → skip).
-      const isTyping = update.transactions.some((tr) =>
-        tr.isUserEvent("input.type"),
-      );
-      const isDelete = update.transactions.some((tr) =>
-        tr.isUserEvent("delete"),
-      );
-      const isPaste = update.transactions.some(
-        (tr) =>
-          tr.isUserEvent("input.paste") || tr.isUserEvent("input.drop"),
-      );
-      const isUserChange = isTyping || isDelete || isPaste;
-      if (!isUserChange) return;
+      // Skip our own cleanup dispatches.
+      if (update.transactions.some((tr) => tr.annotation(isPunctFix))) return;
 
       const doc = update.state.doc;
 
@@ -137,18 +125,27 @@ export const punctuationCleanup = ViewPlugin.fromClass(
       });
       if (changeFrom > changeTo) return;
 
-      // Expand by a small buffer to catch patterns that span the edit boundary.
+      // Detect whether text was removed (not just inserted) by inspecting
+      // the actual change deltas. This is annotation-independent — works for
+      // Vim-mode, undo, and any other source of deletions.
+      let hasRemoval = false;
+      update.changes.iterChanges((fromA, toA, fromB, toB) => {
+        if (toA - fromA > toB - fromB) hasRemoval = true;
+      });
+
+      // Expand by a small buffer to catch patterns at edit boundaries.
       const BUFFER = 20;
       const scanFrom = Math.max(0, changeFrom - BUFFER);
       const scanTo = Math.min(doc.length, changeTo + BUFFER);
       const text = doc.sliceString(scanFrom, scanTo);
 
-      // Run always-active rules on all changes; delete-specific rules only on
-      // delete/paste (so typing "..." isn't collapsed mid-keystroke).
-      const fixes = collectFixes(text, scanFrom, isDelete || isPaste);
+      const fixes = collectFixes(text, scanFrom, hasRemoval);
       if (fixes.length === 0) return;
 
-      update.view.dispatch({ changes: fixes });
+      update.view.dispatch({
+        changes: fixes,
+        annotations: isPunctFix.of(true),
+      });
     }
   },
 );

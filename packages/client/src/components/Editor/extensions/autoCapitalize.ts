@@ -1,40 +1,34 @@
+import { Annotation } from "@codemirror/state";
 import { ViewPlugin, ViewUpdate } from "@codemirror/view";
 import { shouldCapitalizeAfter } from "../../../lib/textProcessing";
+
+// Annotation marking our own dispatches so we can skip them on re-entry.
+const isAutoCapFix = Annotation.define<boolean>();
 
 /**
  * Auto-capitalize the first letter of every sentence.
  *
- * Two complementary checks run on every user-initiated change:
+ * Two complementary checks run on every document change:
  *
  * 1. **Type-time**: when the user types a lowercase letter that falls
- *    immediately after a sentence boundary (sentence-ending punctuation
- *    + whitespace, newline, or start of document), capitalize it in
- *    place. This is the "as-you-type" path and catches the vast majority
- *    of cases.
+ *    immediately after a sentence boundary, capitalize it in place.
  *
- * 2. **Post-change**: after any user input (delete, paste, etc.), check
- *    whether the character now sitting at the cursor is a lowercase
- *    letter at a sentence start. This handles restructuring — deleting
- *    text that puts a previously-mid-sentence word at sentence start,
- *    pasting, and similar rearrangements.
+ * 2. **Post-change**: after ANY change (including Vim deletions, paste,
+ *    undo, etc.), check whether the character now at the cursor is a
+ *    lowercase letter at a sentence start. This handles deletions that
+ *    promote a mid-sentence word to sentence-initial position.
  *
- * Both paths skip programmatic dispatches (the capitalize transaction
- * itself has no user-event annotation) to avoid infinite loops.
+ * Both paths skip our own capitalize dispatches (annotated with
+ * `isAutoCapFix`) to avoid infinite loops. We do NOT filter by user-event
+ * type because Vim-mode operations may not carry standard event labels.
  */
 export const autoCapitalize = ViewPlugin.fromClass(
   class {
     update(update: ViewUpdate) {
       if (!update.docChanged) return;
 
-      // Only respond to user-initiated changes — typing, deleting, pasting.
-      // Our own capitalize dispatch has no user-event annotation, so it
-      // won't retrigger this check.
-      const isUserChange = update.transactions.some(
-        (tr) =>
-          tr.isUserEvent("input") ||
-          tr.isUserEvent("delete"),
-      );
-      if (!isUserChange) return;
+      // Skip our own capitalize dispatches.
+      if (update.transactions.some((tr) => tr.annotation(isAutoCapFix))) return;
 
       const { state } = update;
       const cursor = state.selection.main.head;
@@ -58,16 +52,15 @@ export const autoCapitalize = ViewPlugin.fromClass(
                 to: cursor,
                 insert: typed.toUpperCase(),
               },
+              annotations: isAutoCapFix.of(true),
             });
-            return; // done — skip Case 2 on this update
+            return;
           }
         }
       }
 
-      // ── Case 2: after delete/paste/restructure, check the char at cursor ──
-      // If a deletion or paste left a lowercase letter at a sentence start,
-      // capitalize it. This catches the "word became first in sentence" case.
-      if (cursor >= state.doc.length) return; // cursor at doc end, nothing to fix
+      // ── Case 2: after any change, check the char at cursor ──
+      if (cursor >= state.doc.length) return;
       const charAtCursor = state.doc.sliceString(cursor, cursor + 1);
       if (!/[a-z]/.test(charAtCursor)) return;
 
@@ -83,6 +76,7 @@ export const autoCapitalize = ViewPlugin.fromClass(
             to: cursor + 1,
             insert: charAtCursor.toUpperCase(),
           },
+          annotations: isAutoCapFix.of(true),
         });
       }
     }
